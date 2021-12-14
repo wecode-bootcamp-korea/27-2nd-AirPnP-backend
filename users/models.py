@@ -5,7 +5,7 @@ from categories.models import Category
 class User(models.Model): 
     name       = models.CharField(max_length=45)
     email      = models.EmailField(unique=True)
-    kako_id    = models.CharField(max_length=45)
+    kakao_id   = models.CharField(max_length=45)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta: 
@@ -14,7 +14,7 @@ class User(models.Model):
 class Host(models.Model): 
     phone_number = models.CharField(max_length=45, unique=True)
     carrer       = models.IntegerField()
-    price        = models. IntegerField()
+    price        = models.IntegerField()
     description  = models.TextField()
     longitude    = models.DecimalField(max_digits=9, decimal_places=6)
     latitude     = models.DecimalField(max_digits=9, decimal_places=6)
