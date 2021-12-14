@@ -1,9 +1,10 @@
+import uuid
 from django.db import models
 
 from users.models import User, Host
 
 class Booking(models.Model): 
-    booking_number = models.UUIDField()
+    booking_number = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     start_date     = models.DateTimeField()
     end_date       = models.DateTimeField()
     total_price    = models.IntegerField()
