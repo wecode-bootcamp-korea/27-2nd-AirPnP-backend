@@ -9,7 +9,7 @@ class User(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta: 
-        db_table = 'uesrs'
+        db_table = 'users'
 
 class Host(models.Model): 
     phone_number = models.CharField(max_length=45, unique=True)
