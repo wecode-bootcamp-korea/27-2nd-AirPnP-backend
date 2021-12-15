@@ -15,7 +15,7 @@ class Host(models.Model):
     phone_number = models.CharField(max_length=45, unique=True)
     career       = models.IntegerField()
     price        = models.IntegerField()
-    job = models.CharField(max_length=45, null=True)
+    job          = models.CharField(max_length=45, null=True)
     description  = models.TextField()
     longitude    = models.DecimalField(max_digits=9, decimal_places=6)
     latitude     = models.DecimalField(max_digits=9, decimal_places=6)
