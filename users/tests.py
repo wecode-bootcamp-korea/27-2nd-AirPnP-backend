@@ -1,9 +1,12 @@
-import json, bcrypt, unittest
+import json, jwt, bcrypt, unittest
+import re
 
 from django.http        import response
 from .models            import User, Host, Image
 from categories.models  import Category
 from bookings.models    import Booking
+from my_settings        import ALGORITHM, SECRET_KEY
+
 from django.test        import TestCase, Client
 from unittest           import mock
 from unittest.mock      import patch
@@ -249,3 +252,139 @@ class HostListTest(TestCase):
             }
         )
         self.assertEqual(response.status_code, 200)
+class HostViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        User.objects.create(
+            id       = 1,
+            name     = '김은혜',
+            email    = 'lilo@gmail.com',
+            kakao_id = '203331446'
+        )
+
+        User.objects.create(
+            id       = 2,
+            name     = '여희동',
+            email    = 'alex@gmail.com',
+            kakao_id = '203331447'
+        )
+
+        Category.objects.create(
+            id = 1,
+            talent = "Musician"
+        )
+
+        Category.objects.create(
+            id = 2,
+            talent = "Actor"
+        )
+
+        Host.objects.create(
+            id                = 1,
+            phone_number      = '01052085188',
+            user              = User.objects.get(id=1),
+            career            = 3,
+            price             = 10000,
+            title             = 'hello',
+            subtitle          = 'hello',
+            job               = 'actor',
+            description       = 'hello',
+            local_description = 'hello',
+            longitude         = 1.00,
+            latitude          = 2.00,
+            address           = '서울시 강남구 대치동',
+            category          = Category.objects.get(id=1)
+        )
+
+    def tearDown(self):
+        User.objects.all().delete(),
+        Category.objects.all().delete(),
+        Host.objects.all().delete()
+        
+    def test_hostview_post_success(self):
+        client = Client()
+        
+        host   = {
+            'phone_number'     : '01052085188',
+            'user_id'          : 1,
+            'career'           : 3,
+            'price'            : 10000,
+            'title'            : 'hello',
+            'subtitle'         : 'hello',
+            'job'              : 'actor',
+            'description'      : 'hello',
+            'local_description': 'hello',
+            'longitude'        : 1.00,
+            'latitude'         : 2.00,
+            'address'          : '서울시 강남구 대치동',
+            'category'         : 'Actor'
+        }
+        
+        access_token = jwt.encode({'id': 1}, SECRET_KEY, ALGORITHM)
+        headers = {"HTTP_Authorization" : access_token}
+        response = client.post('/users/host', json.dumps(host), content_type='application/json', **headers)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json(),
+            {
+                'result' : 'CREATED'
+            }
+        )
+
+    def test_hostview_post_exist_category(self):
+        client = Client()
+
+        host   = {
+            'phone_number'     : '01052085188',
+            'user_id'          : 1,
+            'career'           : 3,
+            'price'            : 10000,
+            'title'            : 'hello',
+            'subtitle'         : 'hello',
+            'job'              : 'actor',
+            'description'      : 'hello',
+            'local_description': 'hello',
+            'longitude'        : 1.00,
+            'latitude'         : 2.00,
+            'address'          : '서울시 강남구 대치동',
+            'category'         : 'Musician'
+        }
+
+        access_token = jwt.encode({'id': 1}, SECRET_KEY, ALGORITHM)
+        headers  = {"HTTP_Authorization" : access_token}
+        response = client.post('/users/host', json.dumps(host), content_type='application/json', **headers)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+            {
+                'result' : 'Registered Category'
+            }
+        )
+
+    def test_hostview_post_invalid_token(self):
+        client = Client()
+
+        host   = {
+            'phone_number'     : '01052085188',
+            'user_id'          : 3,
+            'career'           : 3,
+            'price'            : 10000,
+            'title'            : 'hello',
+            'subtitle'         : 'hello',
+            'job'              : 'actor',
+            'description'      : 'hello',
+            'local_description': 'hello',
+            'longitude'        : 1.00,
+            'latitude'         : 2.00,
+            'address'          : '서울시 강남구 대치동',
+            'category'         : 'Musician'
+        }
+
+        headers = {"HTTP_Authorization" : "access_token"}
+        response = client.post('/users/host', json.dumps(host), content_type='application/json', **headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+            {
+                'message' : 'INVALID_TOKEN'
+            }
+        )
