@@ -17,7 +17,9 @@ class SignInTest(TestCase):
     def test_kakao_signin_new_user_success(self, mocked_requests):
         client = Client()
 
-        class MockedResponse:     
+        class MockedResponse:
+            status_code = 200
+            
             def json(self):
                 return {
                     "id": 2033314461,
@@ -245,7 +247,7 @@ class HostListTest(TestCase):
             }
         )
         self.assertEqual(response.status_code, 200)
-
+        
 class HostViewTest(TestCase):
     def setUp(self):
         self.client = Client()

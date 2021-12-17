@@ -12,8 +12,13 @@ class KakaoAPI:
         try :
             headers  = {"Authorization" : f"Bearer ${self.access_token}"}
             response = requests.get(self.user_url, headers = headers, timeout = 3)
+
+            if not response.status_code == 200:
+                return JsonResponse({'message': 'INVALID KAKAO USER'}, status = 400)
             
             return response.json()
 
         except requests.Timeout:
             return JsonResponse({"message" :'TIMEOUT'}, status = 408)
+
+

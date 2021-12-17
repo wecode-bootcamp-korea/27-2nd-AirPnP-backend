@@ -365,5 +365,3 @@ zsdoc/data
 my_settings.py
 
 db_uploader.py
-config.py
-credentials.py

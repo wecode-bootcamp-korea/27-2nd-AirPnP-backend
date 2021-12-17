@@ -7,6 +7,4 @@ urlpatterns = [
     path('/imageUploader', ImageUploader.as_view()),
     path('/hosts', HostListView.as_view()),
     path('/host', HostView.as_view()),
-    path('/hosts/detail/<int:host_id>', HostDetailView.as_view()),
 ]
-
