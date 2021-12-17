@@ -1,13 +1,20 @@
 import json, bcrypt, jwt, boto3, uuid
-
 from my_settings                import ALGORITHM, SECRET_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, IMAGE_URL
 
+from geopy.geocoders            import Nominatim
+from decimal                    import Decimal
 from django.http                import JsonResponse, response
 from django.views               import View
 from django.core.exceptions     import ValidationError
+from django.db.models           import Q
+
 from core.utils.KakaoAPI        import KakaoAPI
 from users.models               import User, Image, Host
 from django.db.models           import Q
+from core.utils.decorator       import signin_decorator
+
+from users.models               import User, Host, Image
+from categories.models          import Category
 
 
 class KakaoLoginView(View):
@@ -16,18 +23,18 @@ class KakaoLoginView(View):
             kakao_access_token = request.headers['Authorization']
             kakao              = KakaoAPI(kakao_access_token)
             
-            kakao_response = kakao.get_kakao_user()
+            kakao_response     = kakao.get_kakao_user()
 
             if kakao_response.get('code') == -401:
                 return JsonResponse({'message': 'INVALID KAKAO USER'}, status=400)
 
-            kakao_id   = kakao_response['id']
-            email      = kakao_response['kakao_account']["email"]
-            name       = kakao_response['properties']["nickname"]
+            kakao_id  = kakao_response['id']
+            email     = kakao_response['kakao_account']["email"]
+            name      = kakao_response['properties']["nickname"]
             
             user, created = User.objects.get_or_create(
-                kakao_id = kakao_id,
-                defaults = {
+                kakao_id  = kakao_id,
+                defaults  = {
                     'name'  : name,
                     'email' : email,
                 }
@@ -107,3 +114,40 @@ class HostListView(View):
         } for host in hosts[offset:offset+limit]]
 
         return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': results}, status=200)
+
+class HostView(View):
+    @signin_decorator
+    def post(self, request):
+        try : 
+            user     = request.user
+            data     = json.loads(request.body)
+            
+            category = Category.objects.get(talent = data["category"])
+            if Host.objects.filter(Q(category=category)&Q(user=user)).exists():
+                return JsonResponse({'result':'Registered Category'}, status = 400)
+            
+            address       = data["address"]
+            location      = Nominatim(user_agent="Users")
+            host_location = location.geocode(address)
+
+            Host.objects.create(
+                    phone_number      = data['phone_number'],
+                    user              = user,
+                    career            = data['career'],
+                    price             = data['price'],
+                    title             = data['title'],
+                    subtitle          = data['subtitle'],
+                    job               = data['job'],
+                    description       = data['description'],
+                    local_description = data['local_description'],
+                    longitude         = Decimal(host_location.longitude),
+                    latitude          = Decimal(host_location.latitude),
+                    address           = address,
+                    category          = category
+            )    
+
+            return JsonResponse({'result' : 'CREATED'}, status = 201)
+
+        except KeyError:
+            return JsonResponse({'message' : "KEYERROER"}, status = 400)
+      
