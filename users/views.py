@@ -13,33 +13,24 @@ from django.db.models           import Q
 from core.utils.KakaoAPI        import KakaoAPI
 from users.models               import User, Image, Host
 from bookings.models            import Booking
-from categories.models          import Category
 from core.utils.decorator       import signin_decorator
+from categories.models          import Category
 
 
 class KakaoLoginView(View):
     def post(self, request):
         try:
             kakao_access_token = request.headers['Authorization']
-            kakao              = KakaoAPI(kakao_access_token)
-            
-            kakao_response     = kakao.get_kakao_user()
-
-            if kakao_response.get('code') == -401:
-                return JsonResponse({'message': 'INVALID KAKAO USER'}, status=400)
-
-            kakao_id  = kakao_response['id']
-            email     = kakao_response['kakao_account']["email"]
-            name      = kakao_response['properties']["nickname"]
+            kakao_api          = KakaoAPI(kakao_access_token)
+            kakao_user    = kakao_api.get_kakao_user()
             
             user, created = User.objects.get_or_create(
-                kakao_id  = kakao_id,
+                kakao_id  = kakao_user['id'],
                 defaults  = {
-                    'name'  : name,
-                    'email' : email,
+                    'name'  : kakao_user['properties']["nickname"],
+                    'email' : kakao_user['kakao_account']["email"],
                 }
             )
-            user.save()
 
             token = jwt.encode({'id': user.id}, SECRET_KEY, ALGORITHM)
 
@@ -48,8 +39,7 @@ class KakaoLoginView(View):
         except KeyError:
             return JsonResponse({'message' : 'KEY_ERROR'}, status = 400)
 
-class ImageUploader(View) :
-    
+class ImageUploader(View):
     def post(self, request) :
         try :
             files = request.FILES.getlist('files')
@@ -120,9 +110,9 @@ class HostView(View):
         try : 
             user     = request.user
             data     = json.loads(request.body)
-            
             category = Category.objects.get(talent = data["category"])
-            if Host.objects.filter(Q(category=category)&Q(user=user)).exists():
+
+            if Host.objects.filter(category = category, user=user).exists():
                 return JsonResponse({'result':'Registered Category'}, status = 400)
             
             address       = data["address"]
