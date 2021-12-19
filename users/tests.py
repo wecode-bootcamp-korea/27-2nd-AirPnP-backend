@@ -1,7 +1,9 @@
 import json, bcrypt, unittest
 
 from django.http        import response
-from .models            import User
+from .models            import User, Host, Image
+from categories.models  import Category
+from bookings.models    import Booking
 from django.test        import TestCase, Client
 from unittest           import mock
 from unittest.mock      import patch
@@ -34,3 +36,216 @@ class SignInTest(TestCase):
         response            = client.post("/users/signin", **headers)
 
         self.assertEqual(response.status_code, 201)
+
+class HostListTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        Category.objects.create(
+            id        = 1,
+            talent    = 'a'
+        )
+
+        Category.objects.create(
+            id        = 2,
+            talent    = 'b'
+        )
+
+        Category.objects.create(
+            id        = 3,
+            talent    = 'c'
+        )
+
+        User.objects.create(
+            id        = 1,
+            name      = 'a',
+            email     = 'a',
+            kakao_id  = 'a'
+        )
+
+        User.objects.create(
+            id        = 2,
+            name      = 'b',
+            email     = 'b',
+            kakao_id  = 'b'
+        )
+
+        User.objects.create(
+            id        = 3,
+            name      = 'c',
+            email     = 'c',
+            kakao_id  = 'c'
+        )
+        
+        Host.objects.create(
+            id                = 1,
+            phone_number      = 'a',
+            career            = 1,
+            price             = 1,
+            job               = 'a',
+            title             = 'a',
+            subtitle          = 'a',
+            description       = 'a',
+            longitude         = 1,
+            latitude          = 1,
+            address           = 'a',
+            local_description = 'a',
+            category          = Category.objects.get(id=1),
+            user              = User.objects.get(id=1)
+        )
+
+        Host.objects.create(
+            id                = 2,
+            phone_number      = 'b',
+            career            = 2,
+            price             = 2,
+            job               = 'b',
+            title             = 'b',
+            subtitle          = 'b',
+            description       = 'b',
+            longitude         = 2,
+            latitude          = 2,
+            address           = 'b',
+            local_description = 'b',
+            category          = Category.objects.get(id=2),
+            user              = User.objects.get(id=2)
+        )
+
+        Host.objects.create(
+            id                = 3,
+            phone_number      = 'c',
+            career            = 3,
+            price             = 3,
+            job               = 'c',
+            title             = 'c',
+            subtitle          = 'c',
+            description       = 'c',
+            longitude         = 3,
+            latitude          = 3,
+            address           = 'c',
+            local_description = 'c',
+            category          = Category.objects.get(id=3),
+            user              = User.objects.get(id=3)
+        )
+
+        Image.objects.create(
+            id        = 1,
+            image_url = 'a',
+            host      = Host.objects.get(id=1)
+        )
+
+        Image.objects.create(
+            id        = 2,
+            image_url = 'b',
+            host      = Host.objects.get(id=2)
+        )
+
+        Image.objects.create(
+            id        = 3,
+            image_url = 'c',
+            host      = Host.objects.get(id=3)
+        )
+
+        Booking.objects.create(
+            id             = 1,
+            booking_number = 1,
+            start_date     = '2021-12-22',
+            end_date       = '2021-12-23',
+            total_price    = 1,
+            host           = Host.objects.get(id=1),
+            user           = User.objects.get(id=1)
+        )
+      
+    def tearDown(self):
+        User.objects.all().delete()
+        Host.objects.all().delete()
+        Category.objects.all().delete()
+        Booking.objects.all().delete()
+
+    def test_hostlist_get_success_with_category(self):
+        response = self.client.get('/users/hosts?start_longitude=0&end_longitude=20&start_latitude=0&end_latitude=20&category=a')
+        self.assertEqual(response.json(),
+            {
+                'MESSAGE': 'SUCCESS',
+                "RESULT" : [{
+                    'host_id'      : 1,
+                    'category'     : 'a',
+                    'name'         : 'a',
+                    'price'        : 1,
+                    'descrition'   : 'a',
+                    'longitude'    : '1.000000',
+                    'latitude'     : '1.000000',
+                    'job'          : 'a',
+                    'address'      : 'a',
+                    'images'       : ['a'],
+                    'start_date'   : '',
+                    'end_date'     : ''
+                }]
+                         
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_hostlist_get_success_with_date(self):
+        response = self.client.get('/users/hosts?start_longitude=0&end_longitude=20&start_latitude=0&end_latitude=20&start_date=2021-12-23&end_date=2021-12-25')
+        self.assertEqual(response.json(),
+            {
+                'MESSAGE': 'SUCCESS',
+                "RESULT" : [
+                    {
+                        'host_id'      : 2,
+                        'category'     : 'b',
+                        'name'         : 'b',
+                        'price'        : 2,
+                        'descrition'   : 'b',
+                        'longitude'    : '2.000000',
+                        'latitude'     : '2.000000',
+                        'job'          : 'b',
+                        'address'      : 'b',
+                        'images'       : ['b'],
+                        'start_date'   : '2021-12-23',
+                        'end_date'     : '2021-12-25'
+                    },
+                    {
+                        'host_id'      : 3,
+                        'category'     : 'c',
+                        'name'         : 'c',
+                        'price'        : 3,
+                        'descrition'   : 'c',
+                        'longitude'    : '3.000000',
+                        'latitude'     : '3.000000',
+                        'job'          : 'c',
+                        'address'      : 'c',
+                        'images'       : ['c'],
+                        'start_date'   : '2021-12-23',
+                        'end_date'     : '2021-12-25'
+                    }
+                ]
+                         
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_hostlist_get_success_with_category_and_date(self):
+        response = self.client.get('/users/hosts?start_longitude=0&end_longitude=20&start_latitude=0&end_latitude=20&category=c&start_date=2021-12-23&end_date=2021-12-25')
+        self.assertEqual(response.json(),
+            {
+                'MESSAGE': 'SUCCESS',
+                "RESULT" : [{
+                    'host_id'      : 3,
+                    'category'     : 'c',
+                    'name'         : 'c',
+                    'price'        : 3,
+                    'descrition'   : 'c',
+                    'longitude'    : '3.000000',
+                    'latitude'     : '3.000000',
+                    'job'          : 'c',
+                    'address'      : 'c',
+                    'images'       : ['c'],
+                    'start_date'   : '2021-12-23',
+                    'end_date'     : '2021-12-25'
+                }]
+                        
+            }
+        )
+        self.assertEqual(response.status_code, 200)

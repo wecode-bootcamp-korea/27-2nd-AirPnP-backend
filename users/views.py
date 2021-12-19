@@ -6,7 +6,8 @@ from django.http                import JsonResponse, response
 from django.views               import View
 from django.core.exceptions     import ValidationError
 from core.utils.KakaoAPI        import KakaoAPI
-from users.models               import User, Image
+from users.models               import User, Image, Host
+from django.db.models           import Q
 
 
 class KakaoLoginView(View):
@@ -60,3 +61,49 @@ class ImageUploader(View) :
 
         except Exception as e :
             return JsonResponse({"ERROR" : e.message})
+
+class HostListView(View):
+    def get(self, request):
+        category        = request.GET.get('category', '')
+        start_date      = request.GET.get('start_date', '')
+        end_date        = request.GET.get('end_date', '')
+        start_longitude = request.GET.get('start_longitude', '')
+        end_longitude   = request.GET.get('end_longitude', '')
+        start_latitude  = request.GET.get('start_latitude', '')
+        end_latitude    = request.GET.get('end_latitude', '')
+        offset          = int(request.GET.get('offset', 0))
+        limit           = int(request.GET.get('limit', 10))
+
+        hosts = Host.objects
+
+        if start_date and end_date:
+            hosts = hosts.exclude(
+                (Q(booking__start_date__lte=start_date) & Q(booking__end_date__gte=start_date)) |
+                (Q(booking__start_date__lte=end_date) & Q(booking__end_date__gte=end_date))
+            )
+        
+        if start_longitude and end_longitude:
+            hosts = hosts.filter((Q(longitude__lte=end_longitude) & Q(longitude__gte=start_longitude)))
+
+        if start_latitude and end_latitude:
+            hosts = hosts.filter((Q(latitude__lte=end_latitude) & Q(latitude__gte=start_latitude)))
+
+        if category:
+            hosts = hosts.filter(category__talent=category)
+
+        results = [{
+            'host_id'      : host.id,
+            'category'     : host.category.talent,
+            'name'         : host.user.name,
+            'price'        : host.price,
+            'descrition'   : host.description,
+            'longitude'    : host.longitude,
+            'latitude'     : host.latitude,
+            'job'          : host.job,
+            'address'      : host.address,
+            'images'       : [image.image_url for image in host.image_set.all()],
+            'start_date'   : start_date,
+            'end_date'     : end_date
+        } for host in hosts[offset:offset+limit]]
+
+        return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': results}, status=200)
