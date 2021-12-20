@@ -172,7 +172,7 @@ class HostListTest(TestCase):
                     'category'     : 'a',
                     'name'         : 'a',
                     'price'        : 1,
-                    'descrition'   : 'a',
+                    'description'  : 'a',
                     'longitude'    : '1.000000',
                     'latitude'     : '1.000000',
                     'address'      : 'a',
@@ -196,7 +196,7 @@ class HostListTest(TestCase):
                         'category'     : 'b',
                         'name'         : 'b',
                         'price'        : 2,
-                        'descrition'   : 'b',
+                        'description'  : 'b',
                         'longitude'    : '2.000000',
                         'latitude'     : '2.000000',
                         'address'      : 'b',
@@ -209,7 +209,7 @@ class HostListTest(TestCase):
                         'category'     : 'c',
                         'name'         : 'c',
                         'price'        : 3,
-                        'descrition'   : 'c',
+                        'description'  : 'c',
                         'longitude'    : '3.000000',
                         'latitude'     : '3.000000',
                         'address'      : 'c',
@@ -233,7 +233,7 @@ class HostListTest(TestCase):
                     'category'     : 'c',
                     'name'         : 'c',
                     'price'        : 3,
-                    'descrition'   : 'c',
+                    'description'  : 'c',
                     'longitude'    : '3.000000',
                     'latitude'     : '3.000000',
                     'address'      : 'c',
@@ -245,6 +245,7 @@ class HostListTest(TestCase):
             }
         )
         self.assertEqual(response.status_code, 200)
+
 class HostViewTest(TestCase):
     def setUp(self):
         self.client = Client()
@@ -377,3 +378,102 @@ class HostViewTest(TestCase):
                 'message' : 'INVALID_TOKEN'
             }
         )
+
+class HostDetailTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        Category.objects.create(
+            id        = 1,
+            talent    = 'a'
+        ) 
+
+        User.objects.create(
+            id        = 1,
+            name      = 'a',
+            email     = 'a',
+            kakao_id  = 'a'
+        )
+
+        Host.objects.create(
+            id                = 1,
+            phone_number      = 'a',
+            career            = 1,
+            price             = 1,
+            title             = 'a',
+            subtitle          = 'a',
+            description       = 'a',
+            longitude         = 1,
+            latitude          = 1,
+            address           = 'a',
+            local_description = 'a',
+            category          = Category.objects.get(id=1),
+            user              = User.objects.get(id=1)
+        )
+
+        Image.objects.create(
+            id        = 1,
+            image_url = 'a',
+            host      = Host.objects.get(id=1)
+        )
+
+        Booking.objects.create(
+            id             = 1,
+            booking_number = 1,
+            start_date     = '2021-12-22',
+            end_date       = '2021-12-23',
+            total_price    = 1,
+            host           = Host.objects.get(id=1),
+            user           = User.objects.get(id=1)
+        )
+
+        Booking.objects.create(
+            id             = 2,
+            booking_number = 2,
+            start_date     = '2021-12-27',
+            end_date       = '2021-12-29',
+            total_price    = 2,
+            host           = Host.objects.get(id=1),
+            user           = User.objects.get(id=1)
+        )
+    
+    def tearDown(self):
+        User.objects.all().delete()
+        Host.objects.all().delete()
+        Category.objects.all().delete()
+        Booking.objects.all().delete()
+        
+    def test_hostdetail_get_success(self):
+        response = self.client.get('/users/hosts/detail/1?start_date=2021-12-06&end_date=2021-12-10')
+        self.assertEqual(response.json(),
+            {
+                'MESSAGE': 'SUCCESS',
+                "RESULT" : {
+                    'category'          : 'a',
+                    'host_name'         : 'a',
+                    'career'            : 1,
+                    'price'             : 1,
+                    'description'       : 'a',
+                    'longitude'         : '1.000000',   
+                    'latitude'          : '1.000000',
+                    'title'             : 'a',
+                    'subtitle'          : 'a',
+                    'address'           : 'a',
+                    'local_description' : 'a',   
+                    'booking_date'      : [
+                        {
+                            'start_date' : '2021-12-22',
+                            'end_date'   : '2021-12-23'
+                        },
+                        {
+                            'start_date' : '2021-12-27',
+                            'end_date'   : '2021-12-29'
+                        }
+                    ],
+                    'images'            : ['a'],
+                    'start_date'        : '2021-12-06',
+                    'end_date'          : '2021-12-10'
+                }
+            }
+        )
+        self.assertEqual(response.status_code, 200)
