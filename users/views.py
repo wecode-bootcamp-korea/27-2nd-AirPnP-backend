@@ -10,11 +10,9 @@ from django.db.models           import Q
 
 from core.utils.KakaoAPI        import KakaoAPI
 from users.models               import User, Image, Host
-from django.db.models           import Q
-from core.utils.decorator       import signin_decorator
-
-from users.models               import User, Host, Image
+from bookings.models            import Booking
 from categories.models          import Category
+from core.utils.decorator       import signin_decorator
 
 
 class KakaoLoginView(View):
@@ -106,7 +104,6 @@ class HostListView(View):
             'descrition'   : host.description,
             'longitude'    : host.longitude,
             'latitude'     : host.latitude,
-            'job'          : host.job,
             'address'      : host.address,
             'images'       : [image.image_url for image in host.image_set.all()],
             'start_date'   : start_date,
@@ -137,7 +134,6 @@ class HostView(View):
                     price             = data['price'],
                     title             = data['title'],
                     subtitle          = data['subtitle'],
-                    job               = data['job'],
                     description       = data['description'],
                     local_description = data['local_description'],
                     longitude         = Decimal(host_location.longitude),
