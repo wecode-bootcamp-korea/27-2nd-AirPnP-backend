@@ -15,7 +15,6 @@ class Host(models.Model):
     phone_number      = models.CharField(max_length=45)
     career            = models.IntegerField()
     price             = models.IntegerField()
-    job               = models.CharField(max_length=45, null=True)
     title             = models.CharField(max_length=255, null=True)
     subtitle          = models.CharField(max_length=255, null=True)
     description       = models.TextField()
