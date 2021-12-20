@@ -1,4 +1,6 @@
 import json, bcrypt, jwt, boto3, uuid
+from datetime                   import datetime
+
 from my_settings                import ALGORITHM, SECRET_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, IMAGE_URL
 
 from geopy.geocoders            import Nominatim
@@ -101,7 +103,7 @@ class HostListView(View):
             'category'     : host.category.talent,
             'name'         : host.user.name,
             'price'        : host.price,
-            'descrition'   : host.description,
+            'description'  : host.description,
             'longitude'    : host.longitude,
             'latitude'     : host.latitude,
             'address'      : host.address,
@@ -147,3 +149,35 @@ class HostView(View):
         except KeyError:
             return JsonResponse({'message' : "KEYERROER"}, status = 400)
       
+class HostDetailView(View):
+    def get(self, request, host_id):
+        if not Host.objects.filter(id=host_id).exists():
+            return JsonResponse({"MESSAGE": "HOST_DOES_NOT_EXISTS"},status = 400)
+
+        start_date = request.GET.get('start_date', '')
+        end_date   = request.GET.get('end_date', '')
+        host       = Host.objects.get(id=host_id)
+        bookings   = Booking.objects.filter(host_id=host_id)
+
+        result = {
+            'category'          : host.category.talent,
+            'host_name'         : host.user.name,
+            'career'            : host.career,
+            'price'             : host.price,
+            'description'       : host.description,
+            'longitude'         : host.longitude,   
+            'latitude'          : host.latitude,
+            'title'             : host.title,
+            'subtitle'          : host.subtitle,
+            'address'           : host.address,
+            'local_description' : host.local_description,   
+            'booking_date'      : [{
+                'start_date' : datetime.strftime(booking.start_date, '%Y-%m-%d'),
+                'end_date'   : datetime.strftime(booking.end_date, '%Y-%m-%d')
+            } for booking in bookings],
+            'images'            : [image.image_url for image in host.image_set.all()],
+            'start_date'        : start_date,
+            'end_date'          : end_date
+        }
+
+        return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': result}, status=200)
