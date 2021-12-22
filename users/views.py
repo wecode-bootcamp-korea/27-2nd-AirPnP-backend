@@ -16,30 +16,21 @@ from bookings.models            import Booking
 from categories.models          import Category
 from core.utils.decorator       import signin_decorator
 
-
 class KakaoLoginView(View):
     def post(self, request):
         try:
             kakao_access_token = request.headers['Authorization']
-            kakao              = KakaoAPI(kakao_access_token)
-            
-            kakao_response     = kakao.get_kakao_user()
 
-            if kakao_response.get('code') == -401:
-                return JsonResponse({'message': 'INVALID KAKAO USER'}, status=400)
-
-            kakao_id  = kakao_response['id']
-            email     = kakao_response['kakao_account']["email"]
-            name      = kakao_response['properties']["nickname"]
+            kakao_api  = KakaoAPI(kakao_access_token)
+            kakao_user = kakao_api.get_kakao_user()
             
             user, created = User.objects.get_or_create(
-                kakao_id  = kakao_id,
+                kakao_id  = kakao_user['id'],
                 defaults  = {
-                    'name'  : name,
-                    'email' : email,
+                    'name'  : kakao_user['kakao_account']["email"],
+                    'email' : kakao_user['nickname'],
                 }
             )
-            user.save()
 
             token = jwt.encode({'id': user.id}, SECRET_KEY, ALGORITHM)
 
@@ -48,26 +39,43 @@ class KakaoLoginView(View):
         except KeyError:
             return JsonResponse({'message' : 'KEY_ERROR'}, status = 400)
 
+class ImageHandler:
+    def __init__(self, client, bucket, bucket_url):
+        self.client     = client
+        self.bucket     = bucket
+        self.bucket_url = bucket_url
+
+    def upload_file(self, file, directory):
+        file._set_name(str(uuid.uuid4()))
+        self.client(self.bucket).put_object(
+            Key         = directory+'/%s'%(file),
+            Body        = file,
+            ContentType = 'jpg'
+        )
+
+        return self.bucket_url+"%s/%s"%(host_id, file)
+
+    def upload_files(self, files):
+        return [self.upload_file(file) for file in files]
+
+boto3_client = boto3.resource(
+    's3', 
+    aws_access_key_id     = AWS_ACCESS_KEY_ID,
+    aws_secret_access_key = AWS_SECRET_ACCESS_KEY
+)
+
+image_handler = ImageHandler(boto3_client, AWS_STORAGE_BUCKET, IMAGE_URL)
+
 class ImageUploader(View) :
-    
     def post(self, request) :
-        try :
-            files = request.FILES.getlist('files')
-            host_id = request.GET.get('host_id')
-            s3r = boto3.resource('s3', aws_access_key_id= AWS_ACCESS_KEY_ID, aws_secret_access_key= AWS_SECRET_ACCESS_KEY)
-            key = "%s" %(host_id)
+        files     = request.FILES.getlist('files')
+        host_id   = request.GET.get('host_id')
+        directory = "%s" %(host_id)
 
-            for file in files :
-                file._set_name(str(uuid.uuid4()))
-                s3r.Bucket(AWS_STORAGE_BUCKET_NAME).put_object( Key=key+'/%s'%(file), Body=file, ContentType='jpg')
-                Image.objects.create(
-                    image_url = IMAGE_URL+"%s/%s"%(host_id, file),
-                    host_id = host_id
-                )
-            return JsonResponse({"MESSGE" : "SUCCESS"}, status=200)
+        urls = image_handler.upload_files(files)
+        Image.objects.bulk_create([Image(image_url = url, host_id = host_id) for url in urls]
 
-        except Exception as e :
-            return JsonResponse({"ERROR" : e.message})
+        return JsonResponse({"MESSGE" : "SUCCESS"}, status=200)
 
 class HostListView(View):
     def get(self, request):
@@ -80,23 +88,24 @@ class HostListView(View):
         end_latitude    = request.GET.get('end_latitude', '')
         offset          = int(request.GET.get('offset', 0))
         limit           = int(request.GET.get('limit', 10))
-
-        hosts = Host.objects
-
-        if start_date and end_date:
-            hosts = hosts.exclude(
-                (Q(booking__start_date__lte=start_date) & Q(booking__end_date__gte=start_date)) |
-                (Q(booking__start_date__lte=end_date) & Q(booking__end_date__gte=end_date))
-            )
         
-        if start_longitude and end_longitude:
-            hosts = hosts.filter((Q(longitude__lte=end_longitude) & Q(longitude__gte=start_longitude)))
+        exclude_set = {
+            "start_date" : Q(booking__start_date__lte=start_date) & Q(booking__end_date__gte=start_date)),
+            "end_date"   : Q(booking__start_date__lte=end_date) & Q(booking__end_date__gte=end_date))
+        }
 
-        if start_latitude and end_latitude:
-            hosts = hosts.filter((Q(latitude__lte=end_latitude) & Q(latitude__gte=start_latitude)))
+        FILTER_SET ={
+            "start_longitude" : Q(longitude__lte=end_longitude) ,
+            "end_longitude"   : Q(longitude__gte=start_longitude),
+            "start_latitude"  : Q(latitude__lte=end_latitude) ,
+            "end_latitude"    : Q(latitude__gte=start_latitude),
+            "category"        : Q(category__talent=category)
+        }
 
-        if category:
-            hosts = hosts.filter(category__talent=category)
+        f = functools.reduce(lambda q1, q2 : q1&q2, [FILTER_SET.get(key, Q()) for key in request.GET.keys()])
+        #e = ...
+
+        hosts = Host.objects.filter(f).exclude(e)
 
         results = [{
             'host_id'      : host.id,
@@ -114,15 +123,15 @@ class HostListView(View):
 
         return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': results}, status=200)
 
+
 class HostView(View):
     @signin_decorator
     def post(self, request):
         try : 
             user     = request.user
             data     = json.loads(request.body)
-            
-            category = Category.objects.get(talent = data["category"])
-            if Host.objects.filter(Q(category=category)&Q(user=user)).exists():
+
+            if Host.objects.filter(category=data["category"]), user=user).exists():
                 return JsonResponse({'result':'Registered Category'}, status = 400)
             
             address       = data["address"]
@@ -148,36 +157,38 @@ class HostView(View):
 
         except KeyError:
             return JsonResponse({'message' : "KEYERROER"}, status = 400)
-      
+
+
 class HostDetailView(View):
     def get(self, request, host_id):
-        if not Host.objects.filter(id=host_id).exists():
-            return JsonResponse({"MESSAGE": "HOST_DOES_NOT_EXISTS"},status = 400)
+        try: 
+            host       = Host.objects.prefetch_related('image_set', 'booking_set').get(id=host_id)
+            # vs Host.objects.get(id=host_id) 검토
+            start_date = request.GET.get('start_date', '')
+            end_date   = request.GET.get('end_date', '')
 
-        start_date = request.GET.get('start_date', '')
-        end_date   = request.GET.get('end_date', '')
-        host       = Host.objects.get(id=host_id)
-        bookings   = Booking.objects.filter(host_id=host_id)
+            result = {
+                'category'          : host.category.talent,
+                'host_name'         : host.user.name,
+                'career'            : host.career,
+                'price'             : host.price,
+                'description'       : host.description,
+                'longitude'         : host.longitude,   
+                'latitude'          : host.latitude,
+                'title'             : host.title,
+                'subtitle'          : host.subtitle,
+                'address'           : host.address,
+                'local_description' : host.local_description,   
+                'booking_date'      : [{
+                    'start_date' : datetime.strftime(booking.start_date, '%Y-%m-%d'),
+                    'end_date'   : datetime.strftime(booking.end_date, '%Y-%m-%d')
+                } for booking in host.booking_set.all()],
+                'images'            : [image.image_url for image in host.image_set.all()],
+                'start_date'        : start_date,
+                'end_date'          : end_date
+            }
 
-        result = {
-            'category'          : host.category.talent,
-            'host_name'         : host.user.name,
-            'career'            : host.career,
-            'price'             : host.price,
-            'description'       : host.description,
-            'longitude'         : host.longitude,   
-            'latitude'          : host.latitude,
-            'title'             : host.title,
-            'subtitle'          : host.subtitle,
-            'address'           : host.address,
-            'local_description' : host.local_description,   
-            'booking_date'      : [{
-                'start_date' : datetime.strftime(booking.start_date, '%Y-%m-%d'),
-                'end_date'   : datetime.strftime(booking.end_date, '%Y-%m-%d')
-            } for booking in bookings],
-            'images'            : [image.image_url for image in host.image_set.all()],
-            'start_date'        : start_date,
-            'end_date'          : end_date
-        }
+            return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': result}, status=200)
 
-        return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': result}, status=200)
+        except Host.DoesNotExist:
+            return JsonResponse({"MESSAGE": "HOST_DOES_NOT_EXISTS"},status = 404)

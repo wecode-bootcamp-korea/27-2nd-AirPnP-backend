@@ -8,12 +8,13 @@ from datetime import datetime
 from .models import Booking
 
 class BookingView(View) :
+    @login_required
     def post(self, request) :
         try :
             data = json.loads(request.body)
 
             host_id     = data['host_id']
-            user_id     = data['user_id']
+            user_id     = request.user.id
             start_date  = datetime.strptime(data['start_date'], "%Y-%m-%d")
             end_date    = datetime.strptime(data['end_date'], "%Y-%m-%d")
             total_price = data['total_price']
@@ -24,7 +25,7 @@ class BookingView(View) :
             if end_date < start_date :
                 return JsonResponse({'ERROR' : 'IMPOSSIBLE_BOOKING_DATE'}, status=403)
                 
-            if Booking.objects.filter(Q(host_id=host_id) & Q(start_date__range= [ start_date, end_date]) | Q(end_date__range=[start_date, end_date])) :
+            if Booking.objects.filter(Q(host_id=host_id, start_date__range=[start_date, end_date]) | Q(end_date__range=[start_date, end_date])) :
                 return JsonResponse({'ERROR' : 'ALREADY_BOOKED'}, status=403)
 
             booking = Booking.objects.create(
