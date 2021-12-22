@@ -1,28 +1,27 @@
-import json, bcrypt, jwt, boto3, uuid, functools
+import json, bcrypt, jwt, boto3, functools, random
 from datetime                   import datetime
 
 from my_settings                import ALGORITHM, SECRET_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, IMAGE_URL
 
 from geopy.geocoders            import Nominatim
 from decimal                    import Decimal
-from django.http                import JsonResponse, response
+from django.http                import JsonResponse
 from django.views               import View
-from django.core.exceptions     import ValidationError
 from django.db.models           import Q
 
 from core.utils.KakaoAPI        import KakaoAPI
-from users.models               import User, Image, Host
-from bookings.models            import Booking
 from core.utils.decorator       import signin_decorator
-from categories.models          import Category
+from core.utils.imageHandler import ImageHandler
 
+from users.models               import User, Image, Host
+from categories.models          import Category
 
 class KakaoLoginView(View):
     def post(self, request):
         try:
             kakao_access_token = request.headers['Authorization']
             kakao_api          = KakaoAPI(kakao_access_token)
-            kakao_user    = kakao_api.get_kakao_user()
+            kakao_user         = kakao_api.get_kakao_user()
             
             user, created = User.objects.get_or_create(
                 kakao_id  = kakao_user['id'],
@@ -39,25 +38,24 @@ class KakaoLoginView(View):
         except KeyError:
             return JsonResponse({'message' : 'KEY_ERROR'}, status = 400)
 
-class ImageUploader(View):
+boto3_resource = boto3.resource(
+                's3',
+                aws_access_key_id     = AWS_ACCESS_KEY_ID,
+                aws_secret_access_key = AWS_SECRET_ACCESS_KEY
+            )
+            
+class ImageUploader(View) :
     def post(self, request) :
-        try :
             files = request.FILES.getlist('files')
             host_id = request.GET.get('host_id')
-            s3r = boto3.resource('s3', aws_access_key_id= AWS_ACCESS_KEY_ID, aws_secret_access_key= AWS_SECRET_ACCESS_KEY)
-            key = "%s" %(host_id)
+            
+            image_handler = ImageHandler(boto3_resource, AWS_STORAGE_BUCKET_NAME, IMAGE_URL)
 
-            for file in files :
-                file._set_name(str(uuid.uuid4()))
-                s3r.Bucket(AWS_STORAGE_BUCKET_NAME).put_object( Key=key+'/%s'%(file), Body=file, ContentType='jpg')
-                Image.objects.create(
-                    image_url = IMAGE_URL+"%s/%s"%(host_id, file),
-                    host_id = host_id
-                )
+            urls = image_handler.upload_files(files, host_id)
+
+            Image.objects.bulk_create([Image(image_url = url, host_id = host_id) for url in urls])
+
             return JsonResponse({"MESSGE" : "SUCCESS"}, status=200)
-
-        except Exception as e :
-            return JsonResponse({"ERROR" : e.message})
 
 class HostListView(View):
     def get(self, request):
@@ -82,26 +80,28 @@ class HostListView(View):
             "category"        : Q(category__talent=category)
         }
 
-        if request.GET.keys():
+        if category =="" :
+             hosts = Host.objects.all()
+        else :
             f = functools.reduce(lambda q1, q2 : q1&q2, [FILTER_SET.get(key, Q()) for key in request.GET.keys()])
             e = functools.reduce(lambda q1, q2 : q1|q2, [exclude_set.get(key, Q()) for key in request.GET.keys()])
-            hosts = Host.objects.order_by('?').filter(f).exclude(e)
-        else:
-            hosts = Host.objects.order_by('?')
+            hosts = Host.objects.filter(f).exclude(e)
 
         results = [{
-            'host_id'      : host.id,
-            'category'     : host.category.talent,
-            'name'         : host.user.name,
-            'price'        : host.price,
-            'description'  : host.description,
-            'longitude'    : float(host.longitude),
-            'latitude'     : float(host.latitude),
-            'address'      : host.address,
-            'images'       : list(host.image_set.values()),
-            'start_date'   : start_date,
-            'end_date'     : end_date
+            'host_id'    : host.id,
+            'category'   : host.category.talent,
+            'name'       : host.user.name,
+            'price'      : host.price,
+            'description': host.description,
+            'longitude'  : float(host.longitude),
+            'latitude'   : float(host.latitude),
+            'address'    : host.address,
+            'images'     : list(host.image_set.values()),
+            'start_date' : start_date,
+            'end_date'   : end_date
         } for host in hosts]
+
+        random.shuffle(results)
 
         return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': results}, status=200)
 
@@ -120,7 +120,7 @@ class HostView(View):
             location      = Nominatim(user_agent="Users")
             host_location = location.geocode(address)
 
-            Host.objects.create(
+            host = Host.objects.create(
                     phone_number      = data['phone_number'],
                     user              = user,
                     career            = data['career'],
@@ -135,10 +135,12 @@ class HostView(View):
                     category          = category
             )    
 
-            return JsonResponse({'result' : 'CREATED'}, status = 201)
+            return JsonResponse({'result' : 'CREATED', 'host_id' : host.id}, status = 201)
 
         except KeyError:
             return JsonResponse({'message' : "KEYERROER"}, status = 400)
+        except Category.DoesNotExist :
+            return JsonResponse({'message' : "DOSENOTEXIST"}, status = 401)
       
 class HostDetailView(View):
     def get(self, request, host_id):
@@ -148,24 +150,24 @@ class HostDetailView(View):
             end_date   = request.GET.get('end_date', '')
 
             result = {
-                'category'          : host.category.talent,
-                'host_name'         : host.user.name,
-                'career'            : host.career,
-                'price'             : host.price,
-                'description'       : host.description,
-                'longitude'         : float(host.longitude),   
-                'latitude'          : float(host.latitude),
-                'title'             : host.title,
-                'subtitle'          : host.subtitle,
-                'address'           : host.address,
-                'local_description' : host.local_description,   
-                'booking_date'      : [{
-                    'start_date' : datetime.strftime(booking.start_date, '%Y-%m-%d'),
-                    'end_date'   : datetime.strftime(booking.end_date, '%Y-%m-%d')
+                'category'         : host.category.talent,
+                'host_name'        : host.user.name,
+                'career'           : host.career,
+                'price'            : host.price,
+                'description'      : host.description,
+                'longitude'        : float(host.longitude),
+                'latitude'         : float(host.latitude),
+                'title'            : host.title,
+                'subtitle'         : host.subtitle,
+                'address'          : host.address,
+                'local_description': host.local_description,
+                'booking_date'     : [{
+                    'start_date': datetime.strftime(booking.start_date, '%Y-%m-%d'),
+                    'end_date'  : datetime.strftime(booking.end_date, '%Y-%m-%d')
                 } for booking in host.booking_set.all()],
-                'images'            : list(host.image_set.values()),
-                'start_date'        : start_date,
-                'end_date'          : end_date
+                'images'    : list(host.image_set.values()),
+                'start_date': start_date,
+                'end_date'  : end_date
             }
 
             return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': result}, status=200)
