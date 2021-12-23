@@ -1,4 +1,4 @@
-import json, bcrypt, jwt, boto3, uuid
+import json, bcrypt, jwt, boto3, uuid, functools
 from datetime                   import datetime
 
 from my_settings                import ALGORITHM, SECRET_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, IMAGE_URL
@@ -68,25 +68,26 @@ class HostListView(View):
         end_longitude   = request.GET.get('end_longitude', '')
         start_latitude  = request.GET.get('start_latitude', '')
         end_latitude    = request.GET.get('end_latitude', '')
-        offset          = int(request.GET.get('offset', 0))
-        limit           = int(request.GET.get('limit', 10))
-
-        hosts = Host.objects
-
-        if start_date and end_date:
-            hosts = hosts.exclude(
-                (Q(booking__start_date__lte=start_date) & Q(booking__end_date__gte=start_date)) |
-                (Q(booking__start_date__lte=end_date) & Q(booking__end_date__gte=end_date))
-            )
         
-        if start_longitude and end_longitude:
-            hosts = hosts.filter((Q(longitude__lte=end_longitude) & Q(longitude__gte=start_longitude)))
+        exclude_set = {
+            "start_date" : Q(booking__start_date__lte=start_date) & Q(booking__end_date__gte=start_date),
+            "end_date"   : Q(booking__start_date__lte=end_date) & Q(booking__end_date__gte=end_date)
+        }
 
-        if start_latitude and end_latitude:
-            hosts = hosts.filter((Q(latitude__lte=end_latitude) & Q(latitude__gte=start_latitude)))
+        FILTER_SET = {
+            "start_longitude" : Q(longitude__lte=end_longitude),
+            "end_longitude"   : Q(longitude__gte=start_longitude),
+            "start_latitude"  : Q(latitude__lte=end_latitude),
+            "end_latitude"    : Q(latitude__gte=start_latitude),
+            "category"        : Q(category__talent=category)
+        }
 
-        if category:
-            hosts = hosts.filter(category__talent=category)
+        if request.GET.keys():
+            f = functools.reduce(lambda q1, q2 : q1&q2, [FILTER_SET.get(key, Q()) for key in request.GET.keys()])
+            e = functools.reduce(lambda q1, q2 : q1|q2, [exclude_set.get(key, Q()) for key in request.GET.keys()])
+            hosts = Host.objects.order_by('?').filter(f).exclude(e)
+        else:
+            hosts = Host.objects.order_by('?')
 
         results = [{
             'host_id'      : host.id,
@@ -94,13 +95,13 @@ class HostListView(View):
             'name'         : host.user.name,
             'price'        : host.price,
             'description'  : host.description,
-            'longitude'    : host.longitude,
-            'latitude'     : host.latitude,
+            'longitude'    : float(host.longitude),
+            'latitude'     : float(host.latitude),
             'address'      : host.address,
-            'images'       : [image.image_url for image in host.image_set.all()],
+            'images'       : list(host.image_set.values()),
             'start_date'   : start_date,
             'end_date'     : end_date
-        } for host in hosts[offset:offset+limit]]
+        } for host in hosts]
 
         return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': results}, status=200)
 
@@ -141,33 +142,33 @@ class HostView(View):
       
 class HostDetailView(View):
     def get(self, request, host_id):
-        if not Host.objects.filter(id=host_id).exists():
-            return JsonResponse({"MESSAGE": "HOST_DOES_NOT_EXISTS"},status = 400)
+        try: 
+            host       = Host.objects.prefetch_related('image_set', 'booking_set').get(id=host_id)
+            start_date = request.GET.get('start_date', '')
+            end_date   = request.GET.get('end_date', '')
 
-        start_date = request.GET.get('start_date', '')
-        end_date   = request.GET.get('end_date', '')
-        host       = Host.objects.get(id=host_id)
-        bookings   = Booking.objects.filter(host_id=host_id)
+            result = {
+                'category'          : host.category.talent,
+                'host_name'         : host.user.name,
+                'career'            : host.career,
+                'price'             : host.price,
+                'description'       : host.description,
+                'longitude'         : float(host.longitude),   
+                'latitude'          : float(host.latitude),
+                'title'             : host.title,
+                'subtitle'          : host.subtitle,
+                'address'           : host.address,
+                'local_description' : host.local_description,   
+                'booking_date'      : [{
+                    'start_date' : datetime.strftime(booking.start_date, '%Y-%m-%d'),
+                    'end_date'   : datetime.strftime(booking.end_date, '%Y-%m-%d')
+                } for booking in host.booking_set.all()],
+                'images'            : list(host.image_set.values()),
+                'start_date'        : start_date,
+                'end_date'          : end_date
+            }
 
-        result = {
-            'category'          : host.category.talent,
-            'host_name'         : host.user.name,
-            'career'            : host.career,
-            'price'             : host.price,
-            'description'       : host.description,
-            'longitude'         : host.longitude,   
-            'latitude'          : host.latitude,
-            'title'             : host.title,
-            'subtitle'          : host.subtitle,
-            'address'           : host.address,
-            'local_description' : host.local_description,   
-            'booking_date'      : [{
-                'start_date' : datetime.strftime(booking.start_date, '%Y-%m-%d'),
-                'end_date'   : datetime.strftime(booking.end_date, '%Y-%m-%d')
-            } for booking in bookings],
-            'images'            : [image.image_url for image in host.image_set.all()],
-            'start_date'        : start_date,
-            'end_date'          : end_date
-        }
+            return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': result}, status=200)
 
-        return JsonResponse({'MESSAGE': 'SUCCESS', 'RESULT': result}, status=200)
+        except Host.DoesNotExist:
+            return JsonResponse({"MESSAGE": "HOST_DOES_NOT_EXISTS"},status = 404)
