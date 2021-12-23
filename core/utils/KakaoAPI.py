@@ -20,5 +20,3 @@ class KakaoAPI:
 
         except requests.Timeout:
             return JsonResponse({"message" :'TIMEOUT'}, status = 408)
-
-
