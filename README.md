@@ -22,7 +22,7 @@
 - Python, Django, MySQL, AWS(EC2, RDS, S3), Docker, Git
 
 ## library
-- JWT, Boto3, Geocoder, faker
+- JWT, Boto3, Geocoder
 
 ## 구현 기능
 
