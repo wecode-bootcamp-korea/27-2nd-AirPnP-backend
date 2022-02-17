@@ -35,8 +35,9 @@ class SignInTest(TestCase):
                         "email": "jino63@naver.com"
                     }
                 }       
-                
+            
         mocked_requests.get = mock.MagicMock(return_value = MockedResponse())
+        print(MockedResponse().__dir__()) 
         headers             = {"HTTP_Authorization" : "access_token"}
         response            = client.post("/users/signin", **headers)
 

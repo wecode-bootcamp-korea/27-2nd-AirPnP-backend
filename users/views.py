@@ -1,17 +1,15 @@
 import json, bcrypt, jwt, boto3, functools, random
 from datetime                   import datetime
 
-from my_settings                import ALGORITHM, SECRET_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, IMAGE_URL
-
 from geopy.geocoders            import Nominatim
 from decimal                    import Decimal
 from django.http                import JsonResponse
 from django.views               import View
 from django.db.models           import Q
-
+from django.conf                import settings
 from core.utils.KakaoAPI        import KakaoAPI
 from core.utils.decorator       import signin_decorator
-from core.utils.imageHandler import ImageHandler
+from core.utils.imageHandler    import ImageHandler
 
 from users.models               import User, Image, Host
 from categories.models          import Category
@@ -31,7 +29,7 @@ class KakaoLoginView(View):
                 }
             )
 
-            token = jwt.encode({'id': user.id}, SECRET_KEY, ALGORITHM)
+            token = jwt.encode({'id': user.id}, settings.SECRET_KEY, settings.ALGORITHM)
 
             return JsonResponse({'message' : 'SUCCESS', 'token' : token}, status = 201)
 
@@ -40,8 +38,8 @@ class KakaoLoginView(View):
 
 boto3_resource = boto3.resource(
                 's3',
-                aws_access_key_id     = AWS_ACCESS_KEY_ID,
-                aws_secret_access_key = AWS_SECRET_ACCESS_KEY
+                aws_access_key_id     = settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key = settings.AWS_SECRET_ACCESS_KEY
             )
             
 class ImageUploader(View) :
@@ -49,7 +47,7 @@ class ImageUploader(View) :
             files = request.FILES.getlist('files')
             host_id = request.GET.get('host_id')
             
-            image_handler = ImageHandler(boto3_resource, AWS_STORAGE_BUCKET_NAME, IMAGE_URL)
+            image_handler = ImageHandler(boto3_resource, settings.AWS_STORAGE_BUCKET_NAME, settings.IMAGE_URL)
 
             urls = image_handler.upload_files(files, host_id)
 

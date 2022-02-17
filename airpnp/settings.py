@@ -1,12 +1,38 @@
 from pathlib        import Path
-from my_settings    import DATABASES, SECRET_KEY
-import pymysql
+import pymysql, os
+from dotenv import load_dotenv
 
 pymysql.install_as_MySQLdb()
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = SECRET_KEY
+SECRET_KEY = os.environ['SECRET_KEY']
+ALGORITHM = os.environ['ALGORITHM']
+
+JWT_ALGORITHM = os.environ['JWT_ALGORITHM']
+
+AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY_ID']
+AWS_SECRET_ACCESS_KEY =os.environ['AWS_SECRET_ACCESS_KEY']
+AWS_STORAGE_BUCKET_NAME = os.environ['AWS_STORAGE_BUCKET_NAME']
+AWS_REGION = os.environ['AWS_REGION']
+IMAGE_URL = os.environ['IMAGE_URL']
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'airpnp',  	
+        'USER': 'root',
+        'PASSWORD': os.environ.get('DB_PASSWORD'),	
+        #'HOST' : 'host.docker.internal',
+        #'HOST' : '127.0.0.1',
+        'HOST' : os.environ.get('DB_HOST'),
+        'PORT': os.environ.get('DB_PORT'),
+        'OPTIONS': {'charset': 'utf8mb4'}
+    }
+}
+
+
 
 DEBUG = True
 
@@ -81,7 +107,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'airpnp.wsgi.application'
 
-DATABASES = DATABASES
 
 AUTH_PASSWORD_VALIDATORS = [
     {
